@@ -21,6 +21,11 @@ jobs:
           SRC="$(find . -name run_mess_manager.py -not -path '*/.git/*' | head -1)"
           if [ -z "$SRC" ]; then echo "run_mess_manager.py is missing: upload the game files first."; exit 1; fi
           cd "$(dirname "$SRC")"
+          # the game's code lives in a "messmanager" folder; build it if the files were uploaded loose
+          mkdir -p messmanager
+          for f in textlib media world story ai ui; do [ -f "$f.py" ] && mv "$f.py" messmanager/; done
+          touch messmanager/__init__.py
+          ls messmanager
           PY=/usr/local/bin/python3.12
           $PY -m pip install pyinstaller certifi
           $PY -m PyInstaller --noconfirm --windowed --target-arch universal2 \
@@ -45,6 +50,10 @@ jobs:
           $src = Get-ChildItem -Recurse -Filter run_mess_manager.py | Where-Object { $_.FullName -notmatch '\\.git\\' } | Select-Object -First 1
           if (-not $src) { Write-Error "run_mess_manager.py is missing: upload the game files first."; exit 1 }
           Set-Location $src.DirectoryName
+          New-Item -ItemType Directory -Force messmanager | Out-Null
+          foreach ($f in 'textlib','media','world','story','ai','ui') { if (Test-Path "$f.py") { Move-Item "$f.py" messmanager\ -Force } }
+          if (-not (Test-Path messmanager\__init__.py)) { New-Item messmanager\__init__.py | Out-Null }
+          Get-ChildItem messmanager
           python -m pip install pyinstaller pillow certifi
           python -m PyInstaller --noconfirm --windowed --onefile --name "Mess Manager" --collect-submodules messmanager --hidden-import PIL._tkinter_finder run_mess_manager.py
           Move-Item "dist\Mess Manager.exe" "$env:GITHUB_WORKSPACE\Mess Manager.exe" -Force

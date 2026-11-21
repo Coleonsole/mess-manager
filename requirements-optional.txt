@@ -1,0 +1,1 @@
+Pillow>=9  # optional: thumbnails and colour-reading for JPG/WEBP. PNG/GIF work without it.
