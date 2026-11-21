@@ -1,0 +1,46 @@
+name: Build Mess Manager
+
+on:
+  push:
+  workflow_dispatch:
+
+jobs:
+  mac:
+    runs-on: macos-14
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Python from python.org (it includes Tkinter and works on Intel and Apple Silicon)
+        run: |
+          curl -fL -o python.pkg https://www.python.org/ftp/python/3.12.10/python-3.12.10-macos11.pkg
+          sudo installer -pkg python.pkg -target /
+          /usr/local/bin/python3.12 -c "import tkinter; print('Tk', tkinter.TkVersion)"
+
+      - name: Build Mess Manager.app
+        run: |
+          PY=/usr/local/bin/python3.12
+          $PY -m pip install pyinstaller certifi
+          $PY -m PyInstaller --noconfirm --windowed --target-arch universal2 \
+              --name "Mess Manager" --collect-submodules messmanager run_mess_manager.py
+          ditto -c -k --keepParent "dist/Mess Manager.app" "Mess Manager (Mac).zip"
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: Mess-Manager-Mac
+          path: "Mess Manager (Mac).zip"
+
+  windows:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Build Mess Manager.exe
+        run: |
+          python -m pip install pyinstaller pillow certifi
+          python -m PyInstaller --noconfirm --windowed --onefile --name "Mess Manager" --collect-submodules messmanager --hidden-import PIL._tkinter_finder run_mess_manager.py
+      - uses: actions/upload-artifact@v4
+        with:
+          name: Mess-Manager-Windows
+          path: "dist/Mess Manager.exe"
