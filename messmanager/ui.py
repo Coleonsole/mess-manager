@@ -348,8 +348,11 @@ class Manager:
         self.ear.tag_configure("speech", foreground="#1f1f1f")
         self.ear.tag_configure("name", foreground="#7a5c2e")
         self.ear.tag_configure("fact", foreground="#8a8a8a")
-        body.add(ear, weight=0)
+        self.body = body
+        self.ear_frame = ear
+        self.ear_shown = False
         self.ear_seen = 0
+        self.maybe_show_ear()
         app.after(50, lambda: body.sashpos(0, 210) if hasattr(body, "sashpos") else None)
 
         bottom = tk.Frame(app, bg=BG)
@@ -429,7 +432,14 @@ class Manager:
             self.last_input_note = now
             self.w.note_input()
 
+    def maybe_show_ear(self):
+        """The Overheard panel only appears once there is someone to overhear."""
+        if not self.ear_shown and self.w.anyone_ever():
+            self.body.add(self.ear_frame, weight=0)
+            self.ear_shown = True
+
     def update_ear(self):
+        self.maybe_show_ear()
         feed = self.w.state.get("feed", [])
         start = self.ear_seen
         if start > len(feed):
@@ -505,7 +515,10 @@ class Manager:
         self._side_updating = True
         s.delete(*s.get_children())
         cnt = self.w.counts()
-        rows = [("Mess", ""), ("Characters (%d)" % cnt["Characters"], CHARS), ("Places", PLACES),
+        rows = [("Mess", "")]
+        if os.path.isdir(self.w.ab(CHARS)):
+            rows.append(("Characters (%d)" % cnt["Characters"], CHARS))
+        rows += [("Places", PLACES),
                 ("    Words (%d)" % cnt["Words"], WORDS), ("    Images (%d)" % cnt["Images"], IMAGES),
                 ("    Sounds (%d)" % cnt["Sounds"], SOUNDS), ("    Logs (%d)" % cnt["Logs"], LOGS)]
         for rel, n in self.w.custom_places():
@@ -1211,10 +1224,9 @@ class AISettings:
         self.top.protocol("WM_DELETE_WINDOW", self.close)
         f = tk.Frame(self.top, padx=16, pady=12)
         f.pack(fill="both", expand=True)
-        tk.Label(f, text="Who writes Mess?", font=("Helvetica", 12, "bold"), anchor="w").pack(fill="x")
+        tk.Label(f, text="AI", font=("Helvetica", 12, "bold"), anchor="w").pack(fill="x")
         tk.Label(f, justify="left", anchor="w", wraplength=520, fg="#555555",
-                 text="With an AI, every conversation, log and event is written fresh, and things happen that "
-                      "nobody scripted. Without one, nobody's words can be written: you only see that they talk.").pack(fill="x", pady=(2, 10))
+                 text="Mess Manager can use an AI running on this computer. Some things in Mess need it.").pack(fill="x", pady=(2, 10))
 
         def row(label):
             r = tk.Frame(f)
@@ -1239,11 +1251,11 @@ class AISettings:
         self.calls.insert(0, s.get("calls", "60"))
         self.pictures = tk.BooleanVar(value=not s.get("pictures", "yes").lower().startswith("n"))
         ttk.Checkbutton(f, text="Let the AI see the pictures you drop in", variable=self.pictures).pack(anchor="w", pady=(6, 0))
-        tk.Label(f, text="Chance (how unpredictable Mess is)", anchor="w").pack(fill="x", pady=(12, 0))
+        tk.Label(f, text="Chance", anchor="w").pack(fill="x", pady=(12, 0))
         self.chance = tk.DoubleVar(value=self.w.chance())
         tk.Scale(f, from_=0.0, to=1.0, resolution=0.1, orient="horizontal", variable=self.chance,
                  showvalue=True, length=300).pack(anchor="w")
-        tk.Label(f, text="0 = everything follows from what you do.   1 = anything can happen.",
+        tk.Label(f, text="0 = predictable.   1 = anything can happen.",
                  fg="#777777", anchor="w").pack(fill="x")
         self.hint_label = tk.Label(f, justify="left", anchor="w", wraplength=520, fg="#555555")
         self.hint_label.pack(fill="x", pady=(12, 0))
@@ -1268,7 +1280,7 @@ class AISettings:
     def hint(self):
         p = self.chosen()
         text = {
-            "none": "Without an AI the people in Mess still live, move, love and change, but their words can't be written.",
+            "none": "Without an AI, some things in Mess stay quiet.",
             "claude": "Get a key at console.anthropic.com. Default model: %s. Each AI call costs a little; "
                       "the hourly limit keeps it small." % AI.DEFAULT_MODELS["claude"],
             "openai": "Get a key at platform.openai.com. Default model: %s. Each AI call costs a little; "
@@ -1278,7 +1290,7 @@ class AISettings:
                       "For it to see pictures, type llava as the Model and download that." % AI.DEFAULT_MODELS["ollama"],
         }[p]
         if p in ("claude", "openai"):
-            text += ("\n\nPrivacy: to write the story, what happens in Mess is sent to that company: their conversations, "
+            text += ("\n\nPrivacy: to write the story, what happens in Mess is sent to that company: "
                      "file names, the words in your text files, and (if ticked) your pictures. "
                      "Your key is kept in %s, outside Mess." % AI.SETTINGS_PATH)
         self.hint_label.configure(text=text)
@@ -1316,7 +1328,7 @@ class AISettings:
                 return
             if data:
                 line = data.get("line") or "It answered."
-                self.result.configure(text="It works. Bob, maybe: \"%s\"" % line, fg="#2b7a3d")
+                self.result.configure(text="It works.", fg="#2b7a3d")
             else:
                 err = (self.w.state.get("ai_errors") or ["no answer"])[-1]
                 self.result.configure(text="It didn't work: %s" % err, fg="#a33")

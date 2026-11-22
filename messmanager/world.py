@@ -82,7 +82,23 @@ PLACE_WORDS = {"warm": (2, 0), "hot": (2, 0), "cold": (-2, 0), "freezing": (-3, 
                "dark": (0, -2), "bright": (0, 2), "light": (0, 1), "safe": (1, 0),
                "scary": (-1, -1), "quiet": (0, 0), "loud": (0, 0), "cosy": (2, 0), "cozy": (2, 0)}
 
+HOW_TO_PLAY_BEFORE = """MESS MANAGER - HELP
+
+Mess Manager keeps a messy folder tidy.
+
+- Drop files into Mess: text, pictures, sounds. Mess Manager sorts them into
+  Places/Words, Places/Images and Places/Sounds, and leaves a note saying where they went.
+- New Folder makes a folder. Drag anything onto a folder to move it there.
+- Double-click a text file to read or edit it. Double-click a picture to view it.
+  Click the play button on a sound to hear it.
+- "Add files..." copies files in from elsewhere on your computer.
+- You can also use your normal file manager (Finder, Explorer). Mess Manager notices.
+- World/Stats.txt holds settings.
+- The System folder holds Mess Manager's own files. You don't need to touch it.
+"""
+
 HOW_TO_PLAY = """HOW TO PLAY MESS MANAGER
+(This file changed.)
 
 This is a file manager for a messy folder. That's all.
 
@@ -126,7 +142,7 @@ There is no way to win. There is no ending. The folder just keeps going.
 
 RULES_TXT = """RULES
 
-Write rules here, in plain English, one per line. Anyone in Mess can read this file.
+Write rules here, in plain English, one per line.
 
 """
 
@@ -204,11 +220,10 @@ class World:
     def setup(self):
         os.makedirs(self.root, exist_ok=True)
         self.load_state()
-        for d in (CHARS, PLACES, WORDS, IMAGES, SOUNDS, LOGS, SYSTEM, WORLD, SYSTEM + "/backups",
+        for d in (PLACES, WORDS, IMAGES, SOUNDS, LOGS, SYSTEM, WORLD, SYSTEM + "/backups",
                   SYSTEM + "/backups/files"):
             os.makedirs(self.ab(d), exist_ok=True)
-        if not self.exists("How To Play.txt"):
-            self.write("How To Play.txt", HOW_TO_PLAY)
+        self.fix_help_file()
         if not self.exists("Rules.txt"):
             self.write("Rules.txt", RULES_TXT)
         self.write(SYSTEM + "/README.txt",
@@ -233,6 +248,29 @@ class World:
         self.state["afk_session"] = None
         self.after_game_changes()
         self.save()
+
+    def anyone_ever(self):
+        st = self.state or {}
+        return bool(st.get("bob") or st.get("chars") or st.get("dead"))
+
+    def fix_help_file(self):
+        """Before anyone exists, Mess Manager is just a tidying app. Afterwards, the help file tells the truth."""
+        rel = "How To Play.txt"
+        cur = self.read(rel)
+        if not self.anyone_ever():
+            if cur is None or "Five files can become someone" in cur:
+                self.write(rel, HOW_TO_PLAY_BEFORE)
+            rules = self.read("Rules.txt")
+            if rules and "Anyone in Mess can read this file." in rules:
+                self.write("Rules.txt", rules.replace(" Anyone in Mess can read this file.", ""), track=False)
+            # an empty Characters folder from an older version gives the game away
+            try:
+                if os.path.isdir(self.ab(CHARS)) and not os.listdir(self.ab(CHARS)):
+                    os.rmdir(self.ab(CHARS))
+            except OSError:
+                pass
+        elif cur is None or cur.strip() == HOW_TO_PLAY_BEFORE.strip():
+            self.write(rel, HOW_TO_PLAY)
 
     def new_state(self):
         now = time.time()
@@ -1192,6 +1230,7 @@ class World:
             ings = unused[:5]
             c = self.make_character("Bob", "bob", ings)
             st["bob"] = c["id"]
+            self.fix_help_file()
             self.story.trigger("born_bob", c=c, ings=ings)
             return c
         if st["bob"] and not st["alice"] and st["total_added"] >= 10 and len(unused) >= 5:
@@ -2254,6 +2293,16 @@ class World:
     # ------------------------------------------------------------ world file
     def world_stats(self):
         people = self.alive()
+        if not self.anyone_ever():
+            return "\n".join([
+                "SETTINGS",
+                "",
+                "Time Speed: %g" % self.state.get("time_speed", 1),
+                "Chance: %g" % self.chance(),
+                "",
+                "Files sorted: %d" % self.state["total_added"],
+                "",
+                "--- Write rules about the world below this line. ---"] + self.state.get("world_notes", [])) + "\n"
         lines = ["THE WORLD",
                  "(This file is the whole of Mess. You can change the Time Speed.)",
                  "",
